@@ -18,27 +18,27 @@ intent_agent = Agent(
         2. "intent": The classified intent
         
         **Intent Categories:**
-        - "collection_only": Only data collection (采集)
-        - "classify_only": Only classification/grading with review (分类分级+审核)
-        - "full_pipeline_with_review": Full pipeline with review (采集+分类+审核)
+        - "collection_only": Only data collection
+        - "classify_only": Only classification/grading with review
+        - "full_pipeline_with_review": Full pipeline with review
         
         **Examples:**
         
         Input: "帮我采集数据"
         Output: {
-          "reasoning": "User specifically mentions '采集数据' (data collection) without mentioning classification. This is a collection-only request.",
+          "reasoning": "User specifically mentions data collection without mentioning classification. This is a collection-only request.",
           "intent": "collection_only"
         }
         
         Input: "对test_db进行分类分级"
         Output: {
-          "reasoning": "User asks for '分类分级' (classification and grading) on a specific database. This requires classification with review.",
+          "reasoning": "User asks for classification and grading on a specific database. This requires classification with review.",
           "intent": "classify_only"
         }
         
         Input: "帮我采集并分类test_db数据库"
         Output: {
-          "reasoning": "User requests both '采集' (collection) and '分类' (classification). This requires the complete pipeline with review.",
+          "reasoning": "User requests both collection and classification. This requires the complete pipeline with review.",
           "intent": "full_pipeline_with_review"
         }
         

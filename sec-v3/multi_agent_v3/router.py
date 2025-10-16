@@ -38,43 +38,79 @@ class RouterAgent(BaseAgent):
             set_pending_review_workflow=set_pending_review_workflow,
             full_pipeline_workflow=full_pipeline_workflow,
             feedback_processor=feedback_processor,
-            sub_agents=[intent_agent],  # Only include always-executed agents
+            sub_agents=[intent_agent],
         )
 
     @override
     async def _run_async_impl(
         self, ctx: InvocationContext
     ) -> AsyncGenerator[Event, None]:
-        # 🔍 First check if we're in "pending human feedback" state
+        from google.genai.types import Content, Part
+        import time
+        
+        # check if in "pending human feedback" state
         pending_review = ctx.session.state.get("pending_review", False)
         
         if pending_review:
-            # Directly process feedback, skip intent recognition
+            # check modification count to prevent infinite loops
+            modification_count = ctx.session.state.get("modification_count", 0)
+            max_modifications = 3
+            
+            if modification_count >= max_modifications:
+                # force approval after max modifications
+                from google.adk.events import EventActions
+                
+                yield Event(
+                    author=self.name,
+                    content=Content(
+                        role="model",
+                        parts=[Part(text=f"⚠️ Maximum modification limit reached ({max_modifications} rounds).\n\n"
+                                        f"🔒 Auto-approving current results to prevent infinite loop.\n\n"
+                                        f"📊 Please review the final results below.")]
+                    ),
+                    actions=EventActions(state_delta={
+                        "pending_review": False,
+                        "modification_count": 0,
+                        "final_classification_results": ctx.session.state.get("classification_results")
+                    }),
+                    timestamp=time.time(),
+                )
+                return
+            
+            # increment modification count before processing
+            ctx.session.state["modification_count"] = modification_count + 1
+            
+            # directly process feedback, skip intent recognition
             async for event in self.feedback_processor.run_async(ctx):
                 yield event
-            return  # End after processing feedback
+            
+            # if review is completed (approved/rejected), reset counter
+            if not ctx.session.state.get("pending_review", False):
+                ctx.session.state["modification_count"] = 0
+            
+            return
 
-        # Normal flow: identify intent
+        # normal flow: identify intent
         async for event in self.intent_agent.run_async(ctx):
             yield event
 
         intent_obj = ctx.session.state.get("user_intent_obj", {})
         intent = intent_obj.get("intent", "full_pipeline_with_review")
 
-        # Route decision
+        # route decision
         if intent == "collection_only":
             selected = self.colt_workflow
         elif intent == "classify_only":
-            # Manually execute classification + review flow
+            # classification + review flow
             async for event in self.clft_workflow.run_async(ctx):
                 yield event
             async for event in self.review_prompt_workflow.run_async(ctx):
                 yield event
-            # Set pending_review flag
+            # set pending_review flag
             async for event in self.set_pending_review_workflow.run_async(ctx):
                 yield event
-            return  # End after setting flag
-        else:  # full_pipeline_with_review
+            return
+        else:
             selected = self.full_pipeline_workflow
 
         async for event in selected.run_async(ctx):

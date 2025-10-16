@@ -46,12 +46,13 @@ sec_classify_mcp_tools = MCPToolset(
     tool_filter=[
         "getMetaDataAllList",
         "executeClassifyLevel",
-        "getClassifyLevelResult"
+        "getClassifyLevelResult",
+        "getFieldClassifyLevelDetail"
     ]
 )
 
 
-# Wait tool for background task processing
+# wait tool for background task processing
 def wait_for_task_sync(seconds: int = 10) -> str:
     """Synchronous wait tool for background task processing"""
     import time
@@ -59,7 +60,7 @@ def wait_for_task_sync(seconds: int = 10) -> str:
     return f"Waited for {seconds} seconds"
 
 
-# Data Collection Agent
+# data Collection Agent
 colt_agent = Agent(
     name="colt_agent",
     model="gemini-2.5-flash",
@@ -95,7 +96,7 @@ colt_agent = Agent(
     ],
 )
 
-# Classification and Grading Agent - Enhanced with structured output
+# classification and Grading Agent - Enhanced with structured output
 clft_agent = Agent(
     name="clft_agent",
     model="gemini-2.5-flash",
@@ -113,7 +114,6 @@ clft_agent = Agent(
                 - Must output detailed structured results including tbName for each table.
 
                 **Available Tools**:
-                - getMetaDataAllList: Query metadata to get dbId by dbName.
                 - executeClassifyLevel: Perform classification (requires dbId, runs in background).
                 - getClassifyLevelResult: Query results (set position=0, requires dbName and tbName).
                 - wait_for_task_sync: Waits for background processing.
@@ -165,7 +165,7 @@ clft_agent = Agent(
     output_key="classification_results",
 )
 
-# Human Review Prompt Agent - Prompts user for feedback
+# human Review Prompt Agent - Prompts user for feedback
 review_prompt_agent = Agent(
     name="review_prompt_agent",
     model="gemini-2.5-flash",
@@ -189,14 +189,14 @@ review_prompt_agent = Agent(
                 - Type **'modified: <your changes>'** - if you want to modify any results
                   
                   **Example**: 
-                  "modified: table_users should be L3 and classification name should be 用户相关信息, table_orders should be L2"
+                  "modified: table_users should be L3 and classification name should be Information about the user, table_orders should be L2"
                 
                 - Type **'rejected: <reason>'** - if results are completely unacceptable
                   
                   **Example**: 
                   "rejected: Wrong database analyzed"
                 
-                💡 You can modify both **Classification Level** (L1/L2/L3/L4) and **Classification Name** (分类名称) for any table.
+                💡 You can modify both **Classification Level** (L1/L2/L3/L4) and **Classification Name** for any table.
                 
                 Please respond with your review decision.
                 "
@@ -205,7 +205,7 @@ review_prompt_agent = Agent(
                 """,
 )
 
-# Custom Agent: Sets pending_review flag to True
+# custom Agent: Sets pending_review flag to True
 class SetPendingReviewAgent(BaseAgent):
     """Deterministic agent that sets the pending_review flag to True"""
     
@@ -221,14 +221,17 @@ class SetPendingReviewAgent(BaseAgent):
                 role="model",
                 parts=[Part(text="⏳ System is now awaiting your review feedback. Please respond with your decision.")]
             ),
-            actions=EventActions(state_delta={"pending_review": True}),
+            actions=EventActions(state_delta={
+                "pending_review": True,
+                "modification_count": 0
+            }),
             timestamp=time.time(),
         )
 
-# Instantiate the SetPendingReviewAgent
+# instantiate the SetPendingReviewAgent
 set_pending_review = SetPendingReviewAgent(name="set_pending_review")
 
-# Feedback Processor Agent - Processes user feedback and applies modifications
+# feedback Processor Agent - Processes user feedback and applies modifications
 feedback_processor_agent = Agent(
     name="feedback_processor_agent",
     model="gemini-2.5-flash",
@@ -238,7 +241,7 @@ feedback_processor_agent = Agent(
                 
                 **Inputs**:
                 1. Read the LATEST USER MESSAGE as feedback
-                2. Read state['classification_results'] (original structured JSON)
+                2. Read state['classification_results'] (current structured JSON)
                 
                 **Process**:
                 
@@ -252,28 +255,36 @@ feedback_processor_agent = Agent(
                    - Extract table name, new classification level, and/or new classification name
                    
                    **Example parsing**:
-                   Input: "modified: table_users should be L3 and classification name should be 用户相关信息, table_orders should be L2"
+                   Input: "modified: table_user should be L3 and classification name should be 用户相关信息, table_order should be L2"
                    
                    Actions:
-                   - Find "table_users" in state['classification_results']['tables']
+                   - Find "table_user" in state['classification_results']['tables']
                    - Set its classification_level to "L3"
                    - Set its classification_name to "用户相关信息"
-                   - Find "table_orders" in state['classification_results']['tables']
+                   - Find "table_order" in state['classification_results']['tables']
                    - Set its classification_level to "L2"
-                   
                    - Update level_color based on new level (L1:#F56C6C, L2:#67C23A, L3:#E6A23C, L4:#909399)
+                   
+                   **CRITICAL - State Management for Modified**:
+                   - Update state['classification_results'] with the new values
+                   - **DO NOT** set state['pending_review'] (leave it as True to continue review loop)
+                   - The system will automatically prompt for next round of feedback
                 
-                3. **Store final results**:
-                   - Save modified/original results to state['final_classification_results']
-                   - Set state['pending_review'] = False to clear the review flag
+                3. **If status is "approved"**:
+                   - Copy state['classification_results'] to state['final_classification_results']
+                   - **Set state['pending_review'] = False** to exit review loop
                 
-                4. **Output to user**:
+                4. **If status is "rejected"**:
+                   - **Set state['pending_review'] = False** to exit review loop
                 
+                **Output Format**:
+                
+                [If Modified]:
                 "
-                ✅ **Review Status**: [Approved/Modified/Rejected]
+                ✅ **Review Status**: Modified
                 💬 **Your Feedback**: [summary of user's feedback]
                 
-                📊 **Final Classification and Grading Results**:
+                📊 **Updated Classification Results** (Round [N]):
                 Database Name: [dbName]
                 
                 [For each table:]
@@ -283,34 +294,61 @@ feedback_processor_agent = Agent(
                 - 📝 Classification Name: [classification_name] [if modified: (Modified from [old_name])]
                 - 💾 Database Type: [database_type]
                 
-                [If any modifications were made:]
                 🔄 **Changes Applied**:
-                - [table_name]: Level [old] → [new], Name "[old]" → "[new]"
+                - [list specific changes made in this round]
+                
+                ---
+                
+                💡 **Continue Review**:
+                - Type **'approved'** - if you're satisfied with these results
+                - Type **'modified: <your changes>'** - to make more modifications
+                - Type **'rejected: <reason>'** - to cancel the review
+                
+                Please provide your decision.
                 "
                 
-                **Important**:
-                - Be precise about what was changed
-                - If approved, output original results with confirmation
-                - If rejected, explain the rejection clearly
-                - Always set state['pending_review'] = False when done
+                [If Approved]:
+                "
+                ✅✅ **Review Status**: Approved ✅✅
+                💬 **Your Feedback**: All results have been confirmed
+                
+                📊 **Final Classification and Grading Results**:
+                Database Name: [dbName]
+                
+                [For each table:]
+                📋 Table Name: [tbName]
+                - 🎯 Classification Level: [classification_level]
+                - 🎨 Level Color: [level_color]
+                - 📝 Classification Name: [classification_name]
+                - 💾 Database Type: [database_type]
+                
+                ✅ Review process completed successfully!
+                "
+                
+                [If Rejected]:
+                "
+                ❌ **Review Status**: Rejected
+                💬 **Your Feedback**: [reason from user]
+                
+                Review process has been cancelled. No changes were saved.
+                "
+                
+                **State Management Summary**:
+                - Modified → Update classification_results, keep pending_review=True (continue loop)
+                - Approved → Set pending_review=False, save to final_classification_results (exit loop)
+                - Rejected → Set pending_review=False (exit loop)
                 """,
-    output_key="final_classification_results",
+    output_key="classification_results",  # Always update current results
 )
 
-# Sequential workflows
+# sequential workflows
 full_pipeline_with_hitl = SequentialAgent(
     name="full_pipeline_with_hitl",
     description="Full pipeline: collection → classification → review prompt → set pending flag",
     sub_agents=[colt_agent, clft_agent, review_prompt_agent, set_pending_review],
 )
 
-# classify_with_hitl = SequentialAgent(
-#     name="classify_with_hitl",
-#     description="Classification with human review",
-#     sub_agents=[clft_agent, review_prompt_agent],
-# )
-
-# Instantiate RouterAgent as root_agent for adk web UI entry
+# instantiate RouterAgent as root_agent for adk web UI entry
 root_agent = RouterAgent(
     name="root_agent",
     intent_agent=intent_agent,
