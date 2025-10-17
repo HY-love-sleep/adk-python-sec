@@ -11,10 +11,10 @@ class RouterAgent(BaseAgent):
     intent_agent: Agent
     colt_workflow: BaseAgent
     clft_workflow: BaseAgent
-    review_prompt_workflow: Agent
-    set_pending_review_workflow: BaseAgent  # Sets pending_review flag
+    review_prompt_workflow: BaseAgent
+    set_pending_review_workflow: BaseAgent
     full_pipeline_workflow: BaseAgent
-    feedback_processor: Agent  # Processes human feedback
+    feedback_processor: BaseAgent
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -48,17 +48,44 @@ class RouterAgent(BaseAgent):
         from google.genai.types import Content, Part
         import time
         
-        # check if in "pending human feedback" state
+        # in "pending human feedback" state?
         pending_review = ctx.session.state.get("pending_review", False)
         
         if pending_review:
+            # Use semantic detection for field queries (not review feedback)
+            user_msg = (ctx.session.state.get("latest_user_message", "") or "").strip().lower()
+            from google.adk.events import EventActions
+            
+            # detect field query requests
+            # todo: maybe user LLM to detect
+            field_query_keywords = ["字段", "field", "详情", "detail"]
+            is_field_query = any(kw in user_msg for kw in field_query_keywords)
+            
+            if is_field_query:
+                # exit review mode and route to clft_agent for field query
+                yield Event(
+                    author=self.name,
+                    content=Content(
+                        role="model",
+                        parts=[Part(text="🔍 Detected field query request. Exiting review mode and processing your query...")]
+                    ),
+                    actions=EventActions(state_delta={
+                        "pending_review": False,
+                        "modification_count": 0,
+                    }),
+                    timestamp=time.time(),
+                )
+                # route to clft_agent
+                async for event in self.clft_workflow.run_async(ctx):
+                    yield event
+                return
+
             # check modification count to prevent infinite loops
             modification_count = ctx.session.state.get("modification_count", 0)
             max_modifications = 3
             
             if modification_count >= max_modifications:
                 # force approval after max modifications
-                from google.adk.events import EventActions
                 
                 yield Event(
                     author=self.name,
@@ -76,8 +103,7 @@ class RouterAgent(BaseAgent):
                     timestamp=time.time(),
                 )
                 return
-            
-            # increment modification count before processing
+
             ctx.session.state["modification_count"] = modification_count + 1
             
             # directly process feedback, skip intent recognition
@@ -100,6 +126,8 @@ class RouterAgent(BaseAgent):
         # route decision
         if intent == "collection_only":
             selected = self.colt_workflow
+        elif intent == "query_field_details":
+            selected = self.clft_workflow
         elif intent == "classify_only":
             # classification + review flow
             async for event in self.clft_workflow.run_async(ctx):
