@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 
 # Custom ReviewPromptAgent
 class ReviewPromptAgent(BaseAgent):
-    """Custom agent that prompts for review without modifying state via instruction"""
+    """Custom agent that prompts for review """
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -207,7 +207,7 @@ feedback_interpreter_agent = Agent(
 
 
 # Custom Feedback Processor Agent - Applies LLM-interpreted feedback deterministically
-# todo: call tool to save res to clft server
+# todo: call tool to save res to clft server(db)
 class FeedbackProcessorAgent(BaseAgent):
     """Custom agent that processes feedback using LLM semantic understanding"""
 
@@ -284,18 +284,10 @@ class FeedbackProcessorAgent(BaseAgent):
 
         if action == "approved":
             # User approved - finalize results
-            # Try multiple keys to find classification_results
-            # todo: for debugging purposes, should be removed
-            classification_results = None
-            possible_keys = ["classification_results", "clft_agent_output", "classification_output"]
-
-            for key in possible_keys:
-                val = ctx.session.state.get(key)
-                if val:
-                    classification_results = self._normalize_state_value(val)
-                    if classification_results and classification_results.get("tables"):
-                        break
-
+            classification_results = self._normalize_state_value(
+                ctx.session.state.get("classification_results")
+            )
+            
             if not classification_results:
                 classification_results = {}
 
@@ -357,61 +349,16 @@ class FeedbackProcessorAgent(BaseAgent):
                 return
 
             # Apply modifications deterministically
-            # Debug: show all state keys and raw values
-            debug_state_keys = f"🔍 **Debug State Keys**: {list(ctx.session.state.keys())}\n\n"
-            yield Event(
-                author=self.name,
-                content=Content(role="model", parts=[Part(text=debug_state_keys)]),
-                timestamp=time.time(),
+            # Get classification_results from state and normalize
+            classification_results = self._normalize_state_value(
+                ctx.session.state.get("classification_results")
             )
-
-            # Debug: show raw classification_results value
-            raw_classification_results = ctx.session.state.get("classification_results")
-            debug_raw = f"🔍 **Raw classification_results**:\n"
-            debug_raw += f"- Type: {type(raw_classification_results)}\n"
-            debug_raw += f"- Value: {str(raw_classification_results)[:500]}\n\n"
-            yield Event(
-                author=self.name,
-                content=Content(role="model", parts=[Part(text=debug_raw)]),
-                timestamp=time.time(),
-            )
-
-            # Try multiple keys to find classification_results
-            classification_results = None
-            possible_keys = [
-                "classification_results",
-                "clft_agent_output",
-                "classification_output",
-            ]
-
-            for key in possible_keys:
-                val = ctx.session.state.get(key)
-                if val:
-                    normalized = self._normalize_state_value(val)
-                    # Check if it's a valid dict with tables
-                    if isinstance(normalized, dict) and normalized.get("tables"):
-                        classification_results = normalized
-                        break
-
-            # Fallback to empty structure
+            
             if not classification_results:
                 classification_results = {}
 
             tables_dict = {t.get("tbName"): t for t in classification_results.get("tables", [])}
             applied_changes = []
-
-            # Debug info
-            available_tables = list(tables_dict.keys())
-            debug_msg = f"🔍 **Debug Info**:\n"
-            debug_msg += f"- Classification results found: {bool(classification_results)}\n"
-            debug_msg += f"- Available tables: {available_tables}\n"
-            debug_msg += f"- Requested modifications: {[mod.get('table_name') for mod in modifications_list]}\n\n"
-
-            yield Event(
-                author=self.name,
-                content=Content(role="model", parts=[Part(text=debug_msg)]),
-                timestamp=time.time(),
-            )
 
             for mod in modifications_list:
                 table_name = mod.get("table_name")

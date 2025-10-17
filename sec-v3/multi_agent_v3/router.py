@@ -86,7 +86,6 @@ class RouterAgent(BaseAgent):
             
             if modification_count >= max_modifications:
                 # force approval after max modifications
-                
                 yield Event(
                     author=self.name,
                     content=Content(
@@ -104,15 +103,25 @@ class RouterAgent(BaseAgent):
                 )
                 return
 
-            ctx.session.state["modification_count"] = modification_count + 1
+            # Increment modification count using EventActions (ADK best practice)
+            yield Event(
+                author=self.name,
+                content=Content(
+                    role="model",
+                    parts=[Part(text=f"🔄 Processing modification round {modification_count + 1}...")]
+                ),
+                actions=EventActions(state_delta={
+                    "modification_count": modification_count + 1
+                }),
+                timestamp=time.time(),
+            )
             
             # directly process feedback, skip intent recognition
             async for event in self.feedback_processor.run_async(ctx):
                 yield event
             
-            # if review is completed (approved/rejected), reset counter
-            if not ctx.session.state.get("pending_review", False):
-                ctx.session.state["modification_count"] = 0
+            # Note: modification_count reset is handled by FeedbackProcessorAgent
+            # when review is completed (approved/rejected) via EventActions
             
             return
 
