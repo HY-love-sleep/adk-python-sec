@@ -20,6 +20,7 @@ from google.adk.events import Event, EventActions
 from google.genai.types import Content, Part
 from pydantic import BaseModel, Field
 from .business_agents import clft_agent
+from .category_matcher import category_matcher
 
 
 # Custom ReviewPromptAgent
@@ -220,7 +221,9 @@ class FeedbackProcessorAgent(BaseAgent):
             name=name,
             interpreter_agent=interpreter_agent,
             clft_agent=clft_agent,
-            sub_agents=[interpreter_agent, clft_agent],
+            # ✅ 不将 clft_agent 加入 sub_agents，因为它已经在 full_pipeline_with_hitl 中
+            # 我们只是在这里调用它，不是让它成为子 Agent
+            sub_agents=[interpreter_agent],
         )
 
     def _normalize_state_value(self, value, default=None):
@@ -293,13 +296,33 @@ class FeedbackProcessorAgent(BaseAgent):
             if not classification_results:
                 classification_results = {}
 
+            # 对每个分类名称进行标准化匹配
+            matched_count = 0
+            for table in classification_results.get("tables", []):
+                user_category = table.get("classification_name", "")
+                # todo: user_category --> original_category
+                if user_category:
+                    matched_category, similarity, status = await category_matcher.find_best_match(user_category)
+
+                    table["classification_name_original"] = user_category
+                    table["classification_name"] = matched_category
+                    table["match_confidence"] = similarity
+                    table["match_status"] = status
+                    
+                    if status == "matched":
+                        matched_count += 1
+
             total_tables = len(classification_results.get("tables", []))
+
+            match_status_msg = ""
+            if matched_count > 0:
+                match_status_msg = f"\n🔍 **Category Matching**: {matched_count}/{total_tables} categories matched to standard categories.\n"
 
             yield Event(
                 author=self.name,
                 content=Content(
                     role="model",
-                    parts=[Part(text="💾 Saving reviewed results to database...")]
+                    parts=[Part(text=f"💾 Saving reviewed results to database...{match_status_msg}")]
                 ),
                 actions=EventActions(state_delta={
                     "final_classification_results": classification_results
@@ -318,7 +341,24 @@ class FeedbackProcessorAgent(BaseAgent):
                 for table in tables:
                     output_text += f"📋 Table Name: {table.get('tbName', 'N/A')}\n"
                     output_text += f"- 🎯 Classification Level: {table.get('classification_level', 'N/A')}\n"
-                    output_text += f"- 📝 Classification Name: {table.get('classification_name', 'N/A')}\n"
+
+                    original_name = table.get("classification_name_original", "")
+                    matched_name = table.get("classification_name", "")
+                    match_status = table.get("match_status", "")
+                    
+                    if match_status == "matched" and original_name != matched_name:
+                        confidence = table.get("match_confidence", 0.0)
+                        output_text += f"- 📝 Classification Name: {matched_name} (原始: '{original_name}', 置信度: {confidence:.2f})\n"
+                    elif match_status == "alias":
+                        output_text += f"- 📝 Classification Name: {matched_name} (别名)\n"
+                    elif match_status == "unmatched":
+                        confidence = table.get("match_confidence", 0.0)
+                        output_text += f"- 📝 Classification Name: {matched_name} (自定义类别，置信度: {confidence:.2f})\n"
+                    elif match_status == "error":
+                        output_text += f"- 📝 Classification Name: {matched_name} (匹配失败，使用原始类别)\n"
+                    else:
+                        output_text += f"- 📝 Classification Name: {matched_name}\n"
+                    
                     output_text += f"- 💾 Database Type: {table.get('database_type', 'N/A')}\n\n"
             else:
                 output_text += "⚠️ No classification results found.\n\n"
