@@ -44,7 +44,8 @@ sec_classify_mcp_tools = MCPToolset(
         "getMetaDataAllList",
         "executeClassifyLevel",
         "getClassifyLevelResult",
-        "getFieldClassifyLevelDetail"
+        "getFieldClassifyLevelDetail",
+        "saveReviewedResult"
     ]
 )
 

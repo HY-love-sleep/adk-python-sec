@@ -19,6 +19,7 @@ from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 from google.genai.types import Content, Part
 from pydantic import BaseModel, Field
+from .business_agents import clft_agent
 
 
 # Custom ReviewPromptAgent
@@ -207,18 +208,19 @@ feedback_interpreter_agent = Agent(
 
 
 # Custom Feedback Processor Agent - Applies LLM-interpreted feedback deterministically
-# todo: call tool to save res to clft server(db)
 class FeedbackProcessorAgent(BaseAgent):
     """Custom agent that processes feedback using LLM semantic understanding"""
 
     interpreter_agent: Agent
+    clft_agent: Agent
     model_config = {"arbitrary_types_allowed": True}
 
-    def __init__(self, name: str, interpreter_agent: Agent):
+    def __init__(self, name: str, interpreter_agent: Agent, clft_agent: Agent):
         super().__init__(
             name=name,
             interpreter_agent=interpreter_agent,
-            sub_agents=[interpreter_agent],
+            clft_agent=clft_agent,
+            sub_agents=[interpreter_agent, clft_agent],
         )
 
     def _normalize_state_value(self, value, default=None):
@@ -291,6 +293,23 @@ class FeedbackProcessorAgent(BaseAgent):
             if not classification_results:
                 classification_results = {}
 
+            total_tables = len(classification_results.get("tables", []))
+
+            yield Event(
+                author=self.name,
+                content=Content(
+                    role="model",
+                    parts=[Part(text="💾 Saving reviewed results to database...")]
+                ),
+                actions=EventActions(state_delta={
+                    "final_classification_results": classification_results
+                }),
+                timestamp=time.time(),
+            )
+
+            async for event in self.clft_agent.run_async(ctx):
+                yield event
+
             output_text = "✅✅ **Review Status**: Approved ✅✅\n\n"
             output_text += "📊 **Final Classification Results**:\n\n"
 
@@ -304,6 +323,7 @@ class FeedbackProcessorAgent(BaseAgent):
             else:
                 output_text += "⚠️ No classification results found.\n\n"
 
+            output_text += f"💾 **Saved to Database**: {total_tables} table(s) saved successfully.\n\n"
             output_text += "✅ Review process completed successfully!\n"
 
             yield Event(
@@ -438,5 +458,6 @@ class FeedbackProcessorAgent(BaseAgent):
 # Instantiate the FeedbackProcessorAgent with LLM interpreter
 feedback_processor_agent = FeedbackProcessorAgent(
     name="feedback_processor_agent",
-    interpreter_agent=feedback_interpreter_agent
+    interpreter_agent=feedback_interpreter_agent,
+    clft_agent=clft_agent
 )

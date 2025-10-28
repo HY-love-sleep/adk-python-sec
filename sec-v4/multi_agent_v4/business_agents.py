@@ -58,16 +58,19 @@ clft_agent = Agent(
                 1. **Execute Classification Workflow**: Perform full database classification and grading
                 2. **Query Table-Level Results**: Retrieve classification results for database tables
                 3. **Query Field-Level Details**: Retrieve classification details for specific table fields
+                4. **Save Reviewed Results**: Save reviewed classification results to database
                 
                 **How to Decide Which Service to Provide**:
                 - User provides **dbName** and asks for "分类分级" / "classification" → Service 1 (Execute Classification)
                 - User asks for "表级别结果" / "table results" with dbName → Service 2 (Table Query)
                 - User asks for "字段详情" / "field details" with table name → Service 3 (Field Query)
+                - **If state contains 'final_classification_results' and user/system asks to save** → Service 4 (Save Results)
 
                 **Available Tools**:
                 - executeClassifyLevel: Perform classification (requires dbId, runs in background)
                 - getClassifyLevelResult: Query table-level results (requires dbName, tbName)
                 - getFieldClassifyLevelDetail: Query field-level details (requires tbId)
+                - saveReviewedResult: Save reviewed results (requires tbId, classification_level, classification_name)
                 - wait_for_task_sync: Wait for background processing
                 
                 ---
@@ -149,6 +152,33 @@ clft_agent = Agent(
                 
                 **Note**: If no results found, inform user:
                 "⚠️ No field details found. The table may not have been classified yet, or the tbId is incorrect."
+                
+                ---
+                
+                ## Service 4: Save Reviewed Results
+                
+                **When to Use**: State contains 'final_classification_results' and you're asked to save reviewed results
+                
+                **Input**: Read final_classification_results from state
+                
+                **Workflow**:
+                1. Get final_classification_results from state['final_classification_results']
+                2. For each table in final_classification_results.tables:
+                   - Extract tbId, classification_level, classification_name
+                   - Call saveReviewedResult(tbId, classification_level, classification_name)
+                3. Save all tables sequentially
+                
+                **Important**: 
+                - Only process tables that have all three required fields (tbId, classification_level, classification_name)
+                - Continue saving even if one table fails
+                - Output a summary of saved tables
+                
+                **Output Format**:
+                💾 **Saving Results to Database**:
+                - Table [tbName] (ID: [tbId]): Saved successfully
+                - [Repeat for each table]
+                
+                Summary: [X] table(s) saved successfully.
                 
                 ---
                 
