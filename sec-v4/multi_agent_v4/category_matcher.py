@@ -17,6 +17,7 @@ class CategoryMatcher:
         """
         self.similarity_threshold = similarity_threshold
         self.client = None  # 延迟初始化
+        self._category_embeddings_cache = {}
     
     def _get_client(self):
         """延迟初始化 Google Generative AI Client"""
@@ -79,39 +80,53 @@ class CategoryMatcher:
         Returns:
             (matched_category, similarity_score)
         """
-        from numpy import dot
-        from numpy.linalg import norm
-        
-        client = self._get_client()
-        
-        # 获取用户输入的 embedding
-        user_emb_response = client.models.embed_content(
-            model="models/embedding-001",
-            contents={"parts": [{"text": user_category}]}
-        )
-        user_embedding = user_emb_response.embedding
-        
-        # 计算与所有标准类别的相似度
-        max_similarity = -1
-        best_match = STANDARD_CATEGORIES[0]
-        
-        for standard_cat in STANDARD_CATEGORIES:
-            std_emb_response = client.models.embed_content(
+        try:
+            from google import genai
+            import asyncio
+            
+            # 使用同步 API（暂时，避免复杂的异步问题）
+            client = genai.Client()
+            from numpy import dot, asarray
+            from numpy.linalg import norm
+            
+            # 获取用户输入的 embedding
+            user_emb_response = client.models.embed_content(
                 model="models/embedding-001",
-                contents={"parts": [{"text": standard_cat}]}
+                contents=[{"parts": [{"text": user_category}]}]
             )
-            std_embedding = std_emb_response.embedding
+            user_embedding = asarray(user_emb_response.embeddings[0].values)
             
-            # 计算余弦相似度
-            similarity = dot(user_embedding, std_embedding) / (
-                norm(user_embedding) * norm(std_embedding)
-            )
+            # 计算与所有标准类别的相似度
+            max_similarity = -1
+            best_match = STANDARD_CATEGORIES[0]
             
-            if similarity > max_similarity:
-                max_similarity = similarity
-                best_match = standard_cat
-        
-        return best_match, float(max_similarity)
+            for standard_cat in STANDARD_CATEGORIES:
+                try:
+                    std_emb_response = client.models.embed_content(
+                        model="models/embedding-001",
+                        contents=[{"parts": [{"text": standard_cat}]}]
+                    )
+                    std_embedding = asarray(std_emb_response.embeddings[0].values)
+                    
+                    # 计算余弦相似度
+                    similarity = dot(user_embedding, std_embedding) / (
+                        norm(user_embedding) * norm(std_embedding)
+                    )
+                    
+                    if similarity > max_similarity:
+                        max_similarity = similarity
+                        best_match = standard_cat
+                        
+                except Exception as e:
+                    print(f"⚠️ Failed to get embedding for '{standard_cat}': {e}")
+                    continue
+            
+            return best_match, float(max_similarity)
+            
+        except Exception as e:
+            print(f"⚠️ Embedding match failed: {e}")
+            # 返回默认值
+            return STANDARD_CATEGORIES[0], 0.0
     
     async def batch_match(self, user_categories: List[str]) -> List[Tuple[str, str, float, str]]:
         """

@@ -325,13 +325,26 @@ class FeedbackProcessorAgent(BaseAgent):
                     parts=[Part(text=f"💾 Saving reviewed results to database...{match_status_msg}")]
                 ),
                 actions=EventActions(state_delta={
-                    "final_classification_results": classification_results
+                    "final_classification_results": classification_results,
+                    "operation_type": "save_reviewed_results"
                 }),
                 timestamp=time.time(),
             )
 
             async for event in self.clft_agent.run_async(ctx):
                 yield event
+
+            yield Event(
+                author=self.name,
+                content=Content(
+                    role="model",
+                    parts=[Part(text="")]
+                ),
+                actions=EventActions(state_delta={
+                    "operation_type": None
+                }),
+                timestamp=time.time(),
+            )
 
             output_text = "✅✅ **Review Status**: Approved ✅✅\n\n"
             output_text += "📊 **Final Classification Results**:\n\n"
