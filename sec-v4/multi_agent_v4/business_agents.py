@@ -187,8 +187,12 @@ clft_agent = Agent(
                 6. ONLY call saveReviewedResult for each table
                 
                 **Workflow**:
-                1. Read final_classification_results from state['final_classification_results']
-                2. For each table in final_classification_results.tables:
+                1. **FIRST PRIORITY**: If state contains 'save_queue' (a list of exact params), ALWAYS iterate it and for each item:
+                   - Call saveReviewedResult(tbId, classification_level, classification_name)
+                   - Use EXACTLY the values from save_queue, DO NOT infer or regenerate
+                   - The classification_name in save_queue is ALREADY matched/standardized
+                   - **CRITICAL**: Never read from final_classification_results when save_queue exists
+                2. **FALLBACK**: Only if save_queue is empty or missing, read final_classification_results from state['final_classification_results'] and iterate tables:
                    - Extract tbId, classification_level, classification_name
                    - Call saveReviewedResult(tbId, classification_level, classification_name)
                    - Wait for response

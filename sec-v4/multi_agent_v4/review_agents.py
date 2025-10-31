@@ -221,8 +221,6 @@ class FeedbackProcessorAgent(BaseAgent):
             name=name,
             interpreter_agent=interpreter_agent,
             clft_agent=clft_agent,
-            # ✅ 不将 clft_agent 加入 sub_agents，因为它已经在 full_pipeline_with_hitl 中
-            # 我们只是在这里调用它，不是让它成为子 Agent
             sub_agents=[interpreter_agent],
         )
 
@@ -318,22 +316,59 @@ class FeedbackProcessorAgent(BaseAgent):
             if matched_count > 0:
                 match_status_msg = f"\n🔍 **Category Matching**: {matched_count}/{total_tables} categories matched to standard categories.\n"
 
+            # 构造 save_queue
+            save_queue = []
+            debug_info = []
+            
+            for table in classification_results.get("tables", []):
+                tbId = table.get("tbId")
+                classification_level = table.get("classification_level")
+                classification_name = table.get("classification_name")
+                original_name = table.get("classification_name_original", classification_name)
+                tbName = table.get("tbName", "N/A")
+                
+                if tbId and classification_level and classification_name:
+                    save_queue.append({
+                        "tbId": tbId,
+                        "classification_level": classification_level,
+                        "classification_name": classification_name,
+                        "tbName": tbName
+                    })
+
+                    if original_name != classification_name:
+                        debug_info.append(f"Table {tbName}: '{original_name}' → '{classification_name}'")
+
+            debug_msg = ""
+            if debug_info:
+                debug_msg = "\n\n🔍 **Matching Summary**:\n" + "\n".join(debug_info)
+
             yield Event(
                 author=self.name,
                 content=Content(
                     role="model",
-                    parts=[Part(text=f"💾 Saving reviewed results to database...{match_status_msg}")]
+                    parts=[Part(text=f"💾 Saving reviewed results to database...{match_status_msg}{debug_msg}\n\n📝 **Important**: Using matched category names for saving.\n")]
                 ),
                 actions=EventActions(state_delta={
                     "final_classification_results": classification_results,
-                    "operation_type": "save_reviewed_results"
+                    "operation_type": "save_reviewed_results",
+                    "save_queue": save_queue
                 }),
+                timestamp=time.time(),
+            )
+
+            yield Event(
+                author=self.name,
+                content=Content(
+                    role="model",
+                    parts=[Part(text="请帮我保存审批后的分类分级结果")]
+                ),
                 timestamp=time.time(),
             )
 
             async for event in self.clft_agent.run_async(ctx):
                 yield event
-
+            
+            # 清除临时状态
             yield Event(
                 author=self.name,
                 content=Content(
@@ -341,7 +376,8 @@ class FeedbackProcessorAgent(BaseAgent):
                     parts=[Part(text="")]
                 ),
                 actions=EventActions(state_delta={
-                    "operation_type": None
+                    "operation_type": None,
+                    "save_queue": None
                 }),
                 timestamp=time.time(),
             )
