@@ -11,6 +11,7 @@ class RouterAgent(BaseAgent):
     intent_agent: Agent
     colt_workflow: BaseAgent
     clft_workflow: BaseAgent
+    desensitize_workflow: BaseAgent
     review_prompt_workflow: BaseAgent
     set_pending_review_workflow: BaseAgent
     full_pipeline_workflow: BaseAgent
@@ -24,6 +25,7 @@ class RouterAgent(BaseAgent):
         intent_agent,
         colt_workflow,
         clft_workflow,
+        desensitize_workflow,
         review_prompt_workflow,
         set_pending_review_workflow,
         full_pipeline_workflow,
@@ -34,6 +36,7 @@ class RouterAgent(BaseAgent):
             intent_agent=intent_agent,
             colt_workflow=colt_workflow,
             clft_workflow=clft_workflow,
+            desensitize_workflow=desensitize_workflow,
             review_prompt_workflow=review_prompt_workflow,
             set_pending_review_workflow=set_pending_review_workflow,
             full_pipeline_workflow=full_pipeline_workflow,
@@ -137,6 +140,8 @@ class RouterAgent(BaseAgent):
             selected = self.colt_workflow
         elif intent == "query_field_details":
             selected = self.clft_workflow
+        elif intent == "desensitize":
+            selected = self.desensitize_workflow
         elif intent == "classify_only":
             # classification + review flow
             async for event in self.clft_workflow.run_async(ctx):

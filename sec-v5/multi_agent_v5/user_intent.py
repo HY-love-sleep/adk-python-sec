@@ -4,7 +4,7 @@ from google.adk.agents import Agent
 class UserIntent(BaseModel):
     reasoning: str = Field(description="Reasoning process for intent classification")
     intent: str = Field(
-        description="User intent: 'collection_only', 'classify_only', 'query_field_details' or 'full_pipeline_with_review'"
+        description="User intent: 'collection_only', 'classify_only', 'query_field_details', 'full_pipeline_with_review', or 'desensitize'"
     )
 
 
@@ -23,13 +23,15 @@ intent_agent = Agent(
         - "classify_only": Only classification/grading with review
         - "full_pipeline_with_review": Full pipeline (collection + classification) with review
         - "query_field_details": Query field-level classification details for specific tables
+        - "desensitize": Data masking/desensitization task
 
         **Decision Logic:**
         1. If user mentions "字段" / "field" / "字段详情" / "field details" → "query_field_details"
-        2. If user ONLY asks for collection → "collection_only"
-        3. If user ONLY asks for classification (without prior classification) → "classify_only"
-        4. If user asks for BOTH collection AND classification → "full_pipeline_with_review"
-        5. After review is completed, if user asks about table details → "query_field_details"
+        2. If user mentions "脱敏" / "desensitize" / "masking" / "数据脱敏" → "desensitize"
+        3. If user ONLY asks for collection → "collection_only"
+        4. If user ONLY asks for classification (without prior classification) → "classify_only"
+        5. If user asks for BOTH collection AND classification → "full_pipeline_with_review"
+        6. After review is completed, if user asks about table details → "query_field_details"
 
         **Examples:**
 
@@ -67,6 +69,18 @@ intent_agent = Agent(
         Output: {
           "reasoning": "User asks for field-level details. This is a field detail query request.",
           "intent": "query_field_details"
+        }
+
+        Input: "对表user进行数据脱敏"
+        Output: {
+          "reasoning": "User explicitly requests data masking/desensitization for a table. This is a desensitization task.",
+          "intent": "desensitize"
+        }
+
+        Input: "帮我脱敏表order的数据"
+        Output: {
+          "reasoning": "User asks for data masking (脱敏) on table 'order'. This requires desensitization workflow.",
+          "intent": "desensitize"
         }
 
         **IMPORTANT**: 
