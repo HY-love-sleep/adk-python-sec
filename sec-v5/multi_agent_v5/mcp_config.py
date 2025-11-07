@@ -68,6 +68,23 @@ desensitize_mcp_tools = MCPToolset(
     ]
 )
 
+# MCP Tools Configuration for provenance management Service
+watermark_mcp_tools = MCPToolset(
+    connection_params=SseConnectionParams(
+        url="http://172.16.22.18:8081/mcp/provenance-management/sse",
+        headers={
+            'Accept': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+        },
+        timeout=50.0,
+        sse_read_timeout=120.0,
+    ),
+    tool_filter=[
+        "watermarkTracing",
+        "getWatermarkReport"
+    ]
+)
+
 # Helper tool for background task processing
 def wait_for_task_sync(seconds: int = 10) -> str:
     """Synchronous wait tool for background task processing
