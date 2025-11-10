@@ -13,7 +13,7 @@ from .mcp_config import sec_collector_mcp_tools, sec_classify_mcp_tools, wait_fo
 # Data Collection Agent
 colt_agent = Agent(
     name="colt_agent",
-    model="gemini-2.5-flash",
+    model="gemini-2.0-flash",
     description="Handles business processes related to data collection services",
     instruction="""
                 You are a data collection expert. Your goal: complete a data collection task and return dbName.
@@ -49,7 +49,7 @@ colt_agent = Agent(
 # Classification and Grading Agent
 clft_agent = Agent(
     name="clft_agent",
-    model="gemini-2.5-flash",
+    model="gemini-2.0-flash",
     description="Unified classification service: handles classification, table-level queries, and field-level queries",
     instruction="""
                 You are the **Classification and Grading Service**. You are the unified entry point for all classification-related operations.
@@ -258,7 +258,7 @@ clft_agent = Agent(
 # Data Desensitization Agent
 desensitize_agent = Agent(
     name="desensitize_agent",
-    model="gemini-2.5-flash",
+    model="gemini-2.0-flash",
     description="Handles business processes related to data masking/desensitization services",
     instruction="""You are a data masking expert. Your goal: complete a data masking workflow and return the masking task results.
 
@@ -400,7 +400,7 @@ prov2_agent = Agent(
     instruction="""You are a watermark tracking expert. Your goal: complete a watermark tracking workflow and return the watermark tracking task results.
 
     **Input**: User provides information needed for watermark tracing task. Parameters may come from:
-    - Previous agent's output (e.g., watermark tracing agent) which may provide dataSourceCategory, dataSourceName,dbSourceName, tableName,discoveredTime
+    - Previous agent's output (e.g., watermark tracing agent) which may provide dataSourceCategory, dataSourceId,dataSourceName,dbSourceName, tableName
     - User's explicit input
     - State from previous workflow steps
 
@@ -424,12 +424,11 @@ prov2_agent = Agent(
       - Response format: { "data": [{"id": 1, "dbname": "test_data", "type": "MySQL"}, ...] }
     - watermarkTracing: Create a new database batch watermark tracing task (REQUIRED)
       - **Required Parameters**:
-        - discoveredTime: String - Input data discoverer time
         - dataSourceCategory: String - data source category (usually same as input)
         - dataSourceId: Integer - Input data source ID (usually same as input)
         - dataSourceName: String - Input data source name (usually same as input)
         - dbSourceName: String - Input db source name (usually same as input)
-        - tableName: String - Input tb name 
+        - tableName: String - Input tb name (usually same as input)
       - **Returns**: 
         - uid: String - watermark tracing number (e.g., "577") - **CRITICAL: Save this for next steps**
       - Response format: {"code":200,"data":{"uid":"577"},"message":"请求成功","success":true}
@@ -444,7 +443,7 @@ prov2_agent = Agent(
 
     **Typical Workflow Pattern**:
     1. **Check input parameters**: 
-       - If discoveredTime, dataSourceCategory, dataSourceId,dataSourceName,dbSourceName,tableName are available (from state or input) → Skip step 2
+       - If dataSourceCategory, dataSourceId,dataSourceName,dbSourceName,tableName are available (from state or input) → Skip step 2
        - If dataSourceId missing → Call watermarkTracing to find it (OPTIONAL)
     2. **Execute watermark tracing task**: 
        - Call watermarkTracing with uid from step 2
@@ -485,20 +484,22 @@ prov2_agent = Agent(
     
     🗄️ 提供机构: [providerDepartment]
     🗄️ 创建人: [createBy]
-    🗄️ 提供时间: [createTime]  
+    🗄️ 提供时间: [createTime]   
+    🗄️ 提供MD5: [hashMd5]  
     
     📋 提供方信息 
     
     🗄️ 使用机构: [userDepartment]
-    🗄️ 使用时间: [refuelTime]  
+    🗄️ 使用时间: [refuelTime]
+    🗄️ 使用MD5: [refuelHashMd5]  
     
     📋 水印配置信息 
     
     🗄️ 任务名称: [taskName]
     🗄️ 使用场景: [usageScenario]
-    🗄️ 调用方式: [callMethod] == "0" ? "一次性" : "周期性"  
+    🗄️ 调用方式: [callMethod] == "0" ? "一次性" : "周期性"   
     
-    🗄️ 水印类型: [watermarkType]
+    🗄️ 水印类型: [watermarkType] == 1 ? "明水印" : ( [watermarkType] == 2 ? "暗水印" : ( [watermarkType] == 3 ? "明暗水印" : ""))
     🗄️ 水印算法: [watermarkAlgorithm]
     🗄️ 加注字段: [fieldName]  
     
