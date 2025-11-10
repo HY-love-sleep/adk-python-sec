@@ -81,7 +81,7 @@ watermark_mcp_tools = MCPToolset(
     ),
     tool_filter=[
         "watermarkTracing",
-        "getWatermarkReport"
+        "getWatermarkInfo",
     ]
 )
 

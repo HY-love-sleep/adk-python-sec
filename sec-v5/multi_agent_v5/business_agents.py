@@ -410,10 +410,10 @@ prov2_agent = Agent(
     3. Query and return  watermark tracing report results
 
     **Constraints & Dependencies**:
-    - A watermark report must be created before it can be tracing
+    - A watermark report must be created before it can be traced
     - Parameters flow from previous tool responses:
       - watermarkTracing returns uid  
-      - getWatermarkReport requires uid from watermarkTracing response
+      - getWatermarkInfo requires uid from watermarkTracing response
     - Background tasks take time to complete; wait appropriately (use wait_for_task_sync)
     - Task execution may be asynchronous; query results may need to wait
 
@@ -433,11 +433,11 @@ prov2_agent = Agent(
       - **Returns**: 
         - uid: String - watermark tracing number (e.g., "577") - **CRITICAL: Save this for next steps**
       - Response format: {"code":200,"data":{"uid":"577"},"message":"请求成功","success":true}
-    - getWatermarkReport: Execute the watermark report task (REQUIRED)
+    - getWatermarkInfo: Execute the watermark info task (REQUIRED)
       - **Required Parameters**:
         - uid: String - watermark tracing number from watermarkTracing response
       - **Returns**: Task execution status
-      - Response format: file
+      - Response format: json
       - Task runs in background
     
     - wait_for_task_sync: Waits for background processing
@@ -450,39 +450,65 @@ prov2_agent = Agent(
        - Call watermarkTracing with uid from step 2
        - Wait 15-30 seconds for background processing
     3. **Query watermark report results**: 
-       - Call getWatermarkReport with uid
+       - Call getWatermarkInfo with uid
        - If results not ready (empty or incomplete), wait 15-30 seconds and retry (max 3 attempts)
 
     **Parameter Flow Chain**:
     - watermarkTracing → returns uid
-    - getWatermarkReport(uid) → download watermark report file
+    - getWatermarkInfo(uid) → download watermark report file
 
     **Retry Policy**: 
     - After watermarkTracing, wait 15-30 seconds before querying results
-    - If getWatermarkReport returns empty or incomplete results, wait 15-30 seconds and retry
+    - If getWatermarkInfo returns empty or incomplete results, wait 15-30 seconds and retry
     - Maximum 3 retry attempts
     - If still no results after retries, inform user that task is still processing
 
-    **Output Format**: 
-    Display results in user-friendly format:
-
-    🔒 **Watermark tracing Task Summary**:
-
-    💾 Data Source: [datasource info]
-    🗄️ Datasource Name: [dataSourceName]
-    🗄️ Database: [dbSourceName]
-    📊 Table: [tableName]
+    **Output Format**:
+    First, store structured results in state['watermark_results'].data as JSON if not show:
+      
+    **Watermark tracing info Summary**: 
+    
+    📋 原始资产信息 
+    
+    🗄️ 数据源类别: [dataSourceCategory]
+    🗄️ 数据源名称: [dataSourceName]
+    🗄️ 数据库: [dbSourceName]  
+    
+    🗄️ 模式: [sourceSchemaName]
+    🗄️ 数据表: [tableName]
+    🗄️ 表级别: [tbLevel]
+    
+    🗄️ 表类别: [tbClassification]
+    🗄️ 标签: [labelName] 
+    
+    📋 提供方信息 
+    
+    🗄️ 提供机构: [providerDepartment]
+    🗄️ 创建人: [createBy]
+    🗄️ 提供时间: [createTime]  
+    
+    📋 提供方信息 
+    
+    🗄️ 使用机构: [userDepartment]
+    🗄️ 使用时间: [refuelTime]  
+    
+    📋 水印配置信息 
+    
+    🗄️ 任务名称: [taskName]
+    🗄️ 使用场景: [usageScenario]
+    🗄️ 调用方式: [callMethod] == "0" ? "一次性" : "周期性"  
+    
+    🗄️ 水印类型: [watermarkType]
+    🗄️ 水印算法: [watermarkAlgorithm]
+    🗄️ 加注字段: [fieldName]  
+    
+    🗄️ 分隔符: [delimiter]
+    🗄️ 数据写入失败处理: [dataFailureHandling] == "0" ? "报错" : "跳过"
+    🗄️ 数据重复加注处理: [dataAnnotationProcessing] == "0" ? "覆盖" : "新建"  
+ 
 
     ✅ Execution Status: Completed
 
-    📈 **Execution Statistics**:
-    - file: [file]
-
-    📋 **Watermark tracing Preview** (Sample Data):
-    | Before tracing | After tracing |
-    |----------------|---------------|
-    | [beforeWatermark] | [afterWatermark] |
-    | ... | ... |
 
     If results are not ready yet:
     ⏳ Task is still processing. Please check again later using uid: [uid]
