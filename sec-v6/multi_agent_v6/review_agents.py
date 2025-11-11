@@ -34,25 +34,29 @@ class ReviewPromptAgent(BaseAgent):
     ) -> AsyncGenerator[Event, None]:
         """Prompt user for review feedback"""
 
-        prompt = """✅ Classification completed! Please review the results above.
+        prompt = """✅ 分类完成！请审核以上结果。
 
-                📝 **How to provide feedback:**
+                📝 **如何提供反馈：**
                 
-                - Type **'approved'** - if all results are correct
+                - 输入 **'approved'** 或 **'通过'** 或 **'确认'** - 如果所有结果都正确
                 
-                - Type **'modified: <your changes>'** - if you want to modify any results
+                - 输入 **'modified: <你的修改>'** 或 **'修改: <你的修改>'** - 如果你想修改任何结果
                   
-                  **Example**: 
-                  "modified: table_user should be L3 and classification name should be Information about the user, table_orders should be L2"
+                  **示例**: 
+                  "modified: table_user 应该是 L3，分类名称应该是用户信息，table_orders 应该是 L2"
+                  或
+                  "修改: table_user 改成 L3，分类名称改成用户信息"
                 
-                - Type **'rejected: <reason>'** - if results are completely unacceptable
+                - 输入 **'rejected: <原因>'** 或 **'拒绝: <原因>'** - 如果结果完全不可接受
                   
-                  **Example**: 
-                  "rejected: Wrong database analyzed"
+                  **示例**: 
+                  "rejected: 分析了错误的数据库"
+                  或
+                  "拒绝: 数据库不对"
                 
-                💡 You can modify both **Classification Level** (L1/L2/L3/L4) and **Classification Name** for any table.
+                💡 你可以修改任何表的 **分类级别** (L1/L2/L3/L4) 和 **分类名称**。
                 
-                Please respond with your review decision.
+                请输入你的审核决定。
                 """
 
         yield Event(
@@ -78,7 +82,7 @@ class SetPendingReviewAgent(BaseAgent):
             author=self.name,
             content=Content(
                 role="model",
-                parts=[Part(text="⏳ System is now awaiting your review feedback. Please respond with your decision.")]
+                parts=[Part(text="⏳ 系统正在等待你的审核反馈。请输入你的决定。")]
             ),
             actions=EventActions(state_delta={
                 "pending_review": True,
@@ -113,62 +117,62 @@ class FeedbackInterpretation(BaseModel):
 feedback_interpreter_agent = Agent(
     name="feedback_interpreter_agent",
     model="gemini-2.5-flash",
-    description="Interprets user feedback semantically and extracts intent",
+    description="语义化解释用户反馈并提取意图",
     instruction="""
-                You are a feedback interpreter. Understand user's review feedback and classify their intent.
+                你是一个反馈解释器。理解用户的审核反馈并对其意图进行分类。
                 
-                **Input**: User's natural language feedback (any format)
+                **输入**：用户的自然语言反馈（任何格式）
                 
-                **Output**: JSON with action type and details
+                **输出**：包含操作类型和详情的 JSON
                 
-                **Action Types**:
-                1. **approved** - User accepts the results
-                   - Examples: "approved", "OK", "looks good", "accept", "确认", "通过"
+                **操作类型**：
+                1. **approved** - 用户接受结果
+                   - 示例："approved"、"OK"、"looks good"、"accept"、"确认"、"通过"、"好的"、"可以"
                 
-                2. **rejected** - User rejects the results
-                   - Examples: "rejected: wrong data", "不对", "reject", "cancel"
-                   - Extract rejection_reason if provided
+                2. **rejected** - 用户拒绝结果
+                   - 示例："rejected: wrong data"、"不对"、"reject"、"cancel"、"拒绝"、"不行"
+                   - 如果提供了拒绝原因，提取 rejection_reason
                 
-                3. **modified** - User wants to modify specific results
-                   - Examples: "table_users should be L3", "把table_users改成L3", "modify table_users to L3"
-                   - Extract all modifications with table_name, new_level, and/or new_classification_name
-                   - **IMPORTANT**: Preserve the FULL table name as mentioned by user (including prefixes like "table_")
+                3. **modified** - 用户想要修改特定结果
+                   - 示例："table_users应该是L3"、"把table_users改成L3"、"modify table_users to L3"
+                   - 提取所有修改，包括 table_name、new_level 和/或 new_classification_name
+                   - **重要**：保留用户提到的完整表名（包括"table_"等前缀）
                 
-                **Examples**:
+                **示例**：
                 
-                Input: "approved"
-                Output: {
+                输入: "approved"
+                输出: {
                   "action": "approved",
                   "modifications": []
                 }
                 
-                Input: "looks good"
-                Output: {
+                输入: "看起来不错"
+                输出: {
                   "action": "approved",
                   "modifications": []
                 }
                 
-                Input: "rejected: wrong database"
-                Output: {
+                输入: "rejected: 数据库错误"
+                输出: {
                   "action": "rejected",
-                  "rejection_reason": "wrong database",
+                  "rejection_reason": "数据库错误",
                   "modifications": []
                 }
                 
-                Input: "table_users should be L3 and classification name should be information about the user"
-                Output: {
+                输入: "table_users应该是L3，分类名称应该是用户信息"
+                输出: {
                   "action": "modified",
                   "modifications": [
                     {
                       "table_name": "table_users",
                       "new_level": "L3",
-                      "new_classification_name": "information about the user"
+                      "new_classification_name": "用户信息"
                     }
                   ]
                 }
                 
-                Input: "modified: table_users should be L3, table_orders should be L2"
-                Output: {
+                输入: "modified: table_users应该是L3，table_orders应该是L2"
+                输出: {
                   "action": "modified",
                   "modifications": [
                     {"table_name": "table_users", "new_level": "L3"},
@@ -176,32 +180,32 @@ feedback_interpreter_agent = Agent(
                   ]
                 }
                 
-                Input: "把 table_users 改成 L3"
-                Output: {
+                输入: "把 table_users 改成 L3"
+                输出: {
                   "action": "modified",
                   "modifications": [
                     {"table_name": "table_users", "new_level": "L3"}
                   ]
                 }
                 
-                Input: "table_user should be L3 and classification name should be information about the user"
-                Output: {
+                输入: "table_user应该是L3，分类名称应该是用户信息"
+                输出: {
                   "action": "modified",
                   "modifications": [
                     {
                       "table_name": "table_user",
                       "new_level": "L3",
-                      "new_classification_name": "information about the user"
+                      "new_classification_name": "用户信息"
                     }
                   ]
                 }
                 
-                **Important**: 
-                - Understand user intent semantically, don't rely on keywords
-                - Extract ALL modifications if action is "modified"
-                - Handle various natural language formats (English and Chinese)
-                - Be flexible: "OK", "好的", "确认" all mean "approved"
-                - **Always preserve the COMPLETE table name** exactly as user mentions it
+                **重要提示**： 
+                - 语义化理解用户意图，不要依赖关键词
+                - 如果操作是"modified"，提取所有修改
+                - 处理各种自然语言格式（英文和中文）
+                - 灵活处理："OK"、"好的"、"确认"都表示"approved"
+                - **始终保留用户提到的完整表名**
                 """,
     output_schema=FeedbackInterpretation,
     output_key="feedback_interpretation",
@@ -314,7 +318,7 @@ class FeedbackProcessorAgent(BaseAgent):
 
             match_status_msg = ""
             if matched_count > 0:
-                match_status_msg = f"\n🔍 **Category Matching**: {matched_count}/{total_tables} categories matched to standard categories.\n"
+                match_status_msg = f"\n🔍 **类别匹配**: {matched_count}/{total_tables} 个类别匹配到标准类别。\n"
 
             # 构造 save_queue
             save_queue = []
@@ -336,17 +340,17 @@ class FeedbackProcessorAgent(BaseAgent):
                     })
 
                     if original_name != classification_name:
-                        debug_info.append(f"Table {tbName}: '{original_name}' → '{classification_name}'")
+                        debug_info.append(f"表 {tbName}: '{original_name}' → '{classification_name}'")
 
             debug_msg = ""
             if debug_info:
-                debug_msg = "\n\n🔍 **Matching Summary**:\n" + "\n".join(debug_info)
+                debug_msg = "\n\n🔍 **匹配摘要**:\n" + "\n".join(debug_info)
 
             yield Event(
                 author=self.name,
                 content=Content(
                     role="model",
-                    parts=[Part(text=f"💾 Saving reviewed results to database...{match_status_msg}{debug_msg}\n\n📝 **Important**: Using matched category names for saving.\n")]
+                    parts=[Part(text=f"💾 正在保存审核结果到数据库...{match_status_msg}{debug_msg}\n\n📝 **重要提示**：使用匹配的类别名称进行保存。\n")]
                 ),
                 actions=EventActions(state_delta={
                     "final_classification_results": classification_results,
@@ -382,14 +386,14 @@ class FeedbackProcessorAgent(BaseAgent):
                 timestamp=time.time(),
             )
 
-            output_text = "✅✅ **Review Status**: Approved ✅✅\n\n"
-            output_text += "📊 **Final Classification Results**:\n\n"
+            output_text = "✅✅ **审核状态**: 已批准 ✅✅\n\n"
+            output_text += "📊 **最终分类结果**:\n\n"
 
             tables = classification_results.get("tables", [])
             if tables:
                 for table in tables:
-                    output_text += f"📋 Table Name: {table.get('tbName', 'N/A')}\n"
-                    output_text += f"- 🎯 Classification Level: {table.get('classification_level', 'N/A')}\n"
+                    output_text += f"📋 表名: {table.get('tbName', 'N/A')}\n"
+                    output_text += f"- 🎯 分类级别: {table.get('classification_level', 'N/A')}\n"
 
                     original_name = table.get("classification_name_original", "")
                     matched_name = table.get("classification_name", "")
@@ -397,23 +401,23 @@ class FeedbackProcessorAgent(BaseAgent):
                     
                     if match_status == "matched" and original_name != matched_name:
                         confidence = table.get("match_confidence", 0.0)
-                        output_text += f"- 📝 Classification Name: {matched_name} (原始: '{original_name}', 置信度: {confidence:.2f})\n"
+                        output_text += f"- 📝 分类名称: {matched_name} (原始: '{original_name}', 置信度: {confidence:.2f})\n"
                     elif match_status == "alias":
-                        output_text += f"- 📝 Classification Name: {matched_name} (别名)\n"
+                        output_text += f"- 📝 分类名称: {matched_name} (别名)\n"
                     elif match_status == "unmatched":
                         confidence = table.get("match_confidence", 0.0)
-                        output_text += f"- 📝 Classification Name: {matched_name} (自定义类别，置信度: {confidence:.2f})\n"
+                        output_text += f"- 📝 分类名称: {matched_name} (自定义类别，置信度: {confidence:.2f})\n"
                     elif match_status == "error":
-                        output_text += f"- 📝 Classification Name: {matched_name} (匹配失败，使用原始类别)\n"
+                        output_text += f"- 📝 分类名称: {matched_name} (匹配失败，使用原始类别)\n"
                     else:
-                        output_text += f"- 📝 Classification Name: {matched_name}\n"
+                        output_text += f"- 📝 分类名称: {matched_name}\n"
                     
-                    output_text += f"- 💾 Database Type: {table.get('database_type', 'N/A')}\n\n"
+                    output_text += f"- 💾 数据库类型: {table.get('database_type', 'N/A')}\n\n"
             else:
-                output_text += "⚠️ No classification results found.\n\n"
+                output_text += "⚠️ 未找到分类结果。\n\n"
 
-            output_text += f"💾 **Saved to Database**: {total_tables} table(s) saved successfully.\n\n"
-            output_text += "✅ Review process completed successfully!\n"
+            output_text += f"💾 **已保存到数据库**: 成功保存 {total_tables} 个表。\n\n"
+            output_text += "✅ 审核流程成功完成！\n"
 
             yield Event(
                 author=self.name,
@@ -427,10 +431,10 @@ class FeedbackProcessorAgent(BaseAgent):
             )
 
         elif action == "rejected":
-            reason = interpretation.get("rejection_reason", "No reason provided")
-            output_text = f"❌ **Review Status**: Rejected\n\n"
-            output_text += f"💬 **Reason**: {reason}\n\n"
-            output_text += "Review process has been cancelled.\n"
+            reason = interpretation.get("rejection_reason", "未提供原因")
+            output_text = f"❌ **审核状态**: 已拒绝\n\n"
+            output_text += f"💬 **原因**: {reason}\n\n"
+            output_text += "审核流程已取消。\n"
 
             yield Event(
                 author=self.name,
@@ -451,7 +455,7 @@ class FeedbackProcessorAgent(BaseAgent):
                     content=Content(
                         role="model",
                         parts=[Part(
-                            text="⚠️ Could not parse your modifications. Please specify table names and changes clearly.")]
+                            text="⚠️ 无法解析你的修改。请清楚地指定表名和更改内容。")]
                     ),
                     timestamp=time.time(),
                 )
@@ -490,37 +494,37 @@ class FeedbackProcessorAgent(BaseAgent):
                     if new_level:
                         old_level = tables_dict[matched_table].get("classification_level", "")
                         tables_dict[matched_table]["classification_level"] = new_level
-                        applied_changes.append(f"Table '{matched_table}': Level {old_level} → {new_level}")
+                        applied_changes.append(f"表 '{matched_table}': 级别 {old_level} → {new_level}")
 
                     if new_name:
                         old_name = tables_dict[matched_table].get("classification_name", "")
                         tables_dict[matched_table]["classification_name"] = new_name
-                        applied_changes.append(f"Table '{matched_table}': Name '{old_name}' → '{new_name}'")
+                        applied_changes.append(f"表 '{matched_table}': 名称 '{old_name}' → '{new_name}'")
 
             # Update state
             classification_results["tables"] = list(tables_dict.values())
 
             # Build output
-            output_text = "✅ **Review Status**: Modified\n\n"
-            output_text += "📊 **Updated Classification Results**:\n\n"
+            output_text = "✅ **审核状态**: 已修改\n\n"
+            output_text += "📊 **更新后的分类结果**:\n\n"
 
             tables = classification_results.get("tables", [])
             if tables:
                 for table in tables:
-                    output_text += f"📋 Table Name: {table.get('tbName', 'N/A')}\n"
-                    output_text += f"- 🎯 Classification Level: {table.get('classification_level', 'N/A')}\n"
-                    output_text += f"- 📝 Classification Name: {table.get('classification_name', 'N/A')}\n\n"
+                    output_text += f"📋 表名: {table.get('tbName', 'N/A')}\n"
+                    output_text += f"- 🎯 分类级别: {table.get('classification_level', 'N/A')}\n"
+                    output_text += f"- 📝 分类名称: {table.get('classification_name', 'N/A')}\n\n"
             else:
-                output_text += "⚠️ No classification results found.\n\n"
+                output_text += "⚠️ 未找到分类结果。\n\n"
 
-            output_text += "🔄 **Changes Applied**:\n"
+            output_text += "🔄 **已应用的更改**:\n"
             if applied_changes:
                 for change in applied_changes:
                     output_text += f"- {change}\n"
             else:
-                output_text += "- No changes were applied (table names may not match)\n"
+                output_text += "- 未应用任何更改（表名可能不匹配）\n"
 
-            output_text += "\n💡 **Continue Review**: You can continue reviewing or approve/reject.\n"
+            output_text += "\n💡 **继续审核**: 你可以继续审核或批准/拒绝。\n"
 
             yield Event(
                 author=self.name,
@@ -538,7 +542,7 @@ class FeedbackProcessorAgent(BaseAgent):
                 content=Content(
                     role="model",
                     parts=[Part(
-                        text="⚠️ Could not understand your feedback. Please try 'approved', 'rejected', or describe your modifications.")]
+                        text="⚠️ 无法理解你的反馈。请尝试输入 'approved'（通过）、'rejected'（拒绝）或描述你的修改。")]
                 ),
                 timestamp=time.time(),
             )

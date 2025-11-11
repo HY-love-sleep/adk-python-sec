@@ -73,7 +73,7 @@ class RouterAgent(BaseAgent):
                     author=self.name,
                     content=Content(
                         role="model",
-                        parts=[Part(text="🔍 Detected field query request. Exiting review mode and processing your query...")]
+                        parts=[Part(text="🔍 检测到字段查询请求。退出审核模式并处理你的查询...")]
                     ),
                     actions=EventActions(state_delta={
                         "pending_review": False,
@@ -96,9 +96,9 @@ class RouterAgent(BaseAgent):
                     author=self.name,
                     content=Content(
                         role="model",
-                        parts=[Part(text=f"⚠️ Maximum modification limit reached ({max_modifications} rounds).\n\n"
-                                        f"🔒 Auto-approving current results to prevent infinite loop.\n\n"
-                                        f"📊 Please review the final results below.")]
+                        parts=[Part(text=f"⚠️ 已达到最大修改次数限制（{max_modifications} 轮）。\n\n"
+                                        f"🔒 自动批准当前结果以防止无限循环。\n\n"
+                                        f"📊 请查看下方的最终结果。")]
                     ),
                     actions=EventActions(state_delta={
                         "pending_review": False,
@@ -114,7 +114,7 @@ class RouterAgent(BaseAgent):
                 author=self.name,
                 content=Content(
                     role="model",
-                    parts=[Part(text=f"🔄 Processing modification round {modification_count + 1}...")]
+                    parts=[Part(text=f"🔄 正在处理第 {modification_count + 1} 轮修改...")]
                 ),
                 actions=EventActions(state_delta={
                     "modification_count": modification_count + 1
