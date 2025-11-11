@@ -83,6 +83,12 @@ intent_agent = Agent(
           "intent": "desensitize"
         }
 
+        Input: "对表user进行数据溯源"
+        Output: {
+          "reasoning": "User asks for data watermark tracking on table 'user'. This requires prov2_workflow workflow.",
+          "intent": "watermark_only"
+        }
+        
         **IMPORTANT**: 
         - "字段" / "field" keywords → almost always "query_field_details"
         - After classification is done, queries about specific tables → "query_field_details"
