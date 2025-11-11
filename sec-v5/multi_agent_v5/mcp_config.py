@@ -41,7 +41,7 @@ sec_classify_mcp_tools = MCPToolset(
         sse_read_timeout=120.0,
     ),
     tool_filter=[
-        "getMetaDataAllList",
+        "getDbIdByName",
         "executeClassifyLevel",
         "getClassifyLevelResult",
         "getFieldClassifyLevelDetail",

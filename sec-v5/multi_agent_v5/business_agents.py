@@ -79,6 +79,7 @@ clft_agent = Agent(
                 - If both NO → Continue with normal classification workflow (Service 1)
 
                 **Available Tools**:
+                - getDbIdByName: Query to get dbId by dbName
                 - executeClassifyLevel: Perform classification (requires dbId, runs in background)
                 - getClassifyLevelResult: Query table-level results (requires dbName, tbName)
                 - getFieldClassifyLevelDetail: Query field-level details (requires tbId)
