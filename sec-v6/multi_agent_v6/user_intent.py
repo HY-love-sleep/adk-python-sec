@@ -29,11 +29,12 @@ intent_agent = Agent(
         **决策逻辑：**
         1. 如果用户提到"字段" / "field" / "字段详情" / "field details" → "query_field_details"
         2. 如果用户提到"脱敏" / "desensitize" / "masking" / "数据脱敏" → "desensitize"
-        3. 如果用户提到"溯源" / "水印" / "watermark" / "数据溯源" → "watermark_only"
-        4. 如果用户只要求采集 → "collection_only"
-        5. 如果用户只要求分类（没有先前的分类） → "classify_only"
-        6. 如果用户要求采集和分类两者 → "full_pipeline_with_review"
-        7. 审核完成后，如果用户询问表详情 → "query_field_details"
+        3. 如果用户分类分级和脱敏， 先执行分类分级流程, 再执行脱敏流程
+        4. 如果用户提到"溯源" / "水印" / "watermark" / "数据溯源" → "watermark_only"
+        5. 如果用户只要求采集 → "collection_only"
+        6. 如果用户只要求分类（没有先前的分类） → "classify_only"
+        7. 如果用户要求采集和分类两者 → "full_pipeline_with_review"
+        8. 审核完成后，如果用户询问表详情 → "query_field_details"
 
         **示例：**
 
